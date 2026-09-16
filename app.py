@@ -1,22 +1,242 @@
 import streamlit as st
-from recommender import get_recommendations
+import pandas as pd
 
-st.set_page_config(page_title="Hệ Thống Đề Xuất Phim", layout="wide")
-st.title("🎬 Hệ Thống Phân Tích & Đề Xuất Phim (MovieLens 100K)")
+# CẤU HÌNH TRANG
 
-tab1, tab2 = st.tabs(["🔍 Gợi Ý Phim", "📊 Phân Tích Dữ Liệu (EDA)"])
+st.set_page_config(
+    page_title="Hệ Thống Đề Xuất Phim",
+    layout="wide"
+)
+
+st.title("Hệ Thống Phân Tích và Đề Xuất Phim")
+st.write(
+    "Ứng dụng phân tích dữ liệu phim và đề xuất "
+    "các bộ phim tương tự."
+)
+
+
+# ĐỌC DỮ LIỆU
+
+@st.cache_data
+def load_data():
+    movies = pd.read_csv(
+        "data/cleaned_movies.csv"
+    )
+
+    ratings = pd.read_csv(
+        "data/cleaned_ratings.csv"
+    )
+
+    return movies, ratings
+
+
+try:
+    movies, ratings = load_data()
+
+except Exception as e:
+    st.error(
+        "Không thể đọc dữ liệu. "
+        "Hãy kiểm tra lại đường dẫn và tên file CSV."
+    )
+    st.stop()
+
+# XỬ LÝ DỮ LIỆU CƠ BẢN
+
+movies["MovieTitle"] = movies["MovieTitle"].fillna(
+    "Không có tên phim"
+)
+
+ratings["Ratings"] = pd.to_numeric(
+    ratings["Ratings"],
+    errors="coerce"
+)
+
+movies["ReleaseDate"] = pd.to_datetime(
+    movies["ReleaseDate"],
+    errors="coerce"
+)
+
+ratings["Timestamp"] = pd.to_datetime(
+    ratings["Timestamp"],
+    errors="coerce"
+)
+
+# TẠO TABS
+
+tab1, tab2 = st.tabs([
+    "Gợi Ý Phim",
+    "Phân Tích Dữ Liệu"
+])
+
+# TAB 1: GỢI Ý PHIM
 
 with tab1:
+
     st.header("Tìm Phim Tương Tự")
-    selected_movie = st.text_input("Nhập tên bộ phim bạn thích:", "Toy Story (1995)")
-    num_rec = st.slider("Số lượng phim gợi ý:", 1, 10, 5)
-    
+
+    st.write(
+        "Chọn một bộ phim bạn yêu thích. "
+        "Hệ thống sẽ đề xuất các bộ phim tương tự."
+    )
+
+    # Danh sách phim
+    movie_list = (
+        movies["MovieTitle"]
+        .dropna()
+        .sort_values()
+        .unique()
+        .tolist()
+    )
+
+    selected_movie = st.selectbox(
+        "Chọn bộ phim:",
+        movie_list
+    )
+
+    num_rec = st.slider(
+        "Số lượng phim gợi ý:",
+        min_value=1,
+        max_value=10,
+        value=5
+    )
+
     if st.button("Hiển Thị Gợi Ý"):
-        results = get_recommendations(selected_movie, num_rec)
-        st.subheader("Các bộ phim tương tự:")
-        for i, movie in enumerate(results, 1):
-            st.write(f"**{i}.** {movie}")
+
+        st.info(
+            "Chức năng đề xuất phim sẽ được tích hợp "
+            "sau khi TV1 hoàn thành mô hình Recommendation."
+        )
+
+        st.write("Phim đã chọn:", selected_movie)
+        st.write("Số lượng phim cần đề xuất:", num_rec)
+
+        # TODO:
+        # Tích hợp model của TV1 tại đây.
+
+# TAB 2: PHÂN TÍCH DỮ LIỆU
 
 with tab2:
+
     st.header("Phân Tích Dữ Liệu")
-    st.info("Khu vực hiển thị biểu đồ của TV3")
+
+    st.write(
+        "Khu vực này hiển thị thông tin tổng quan "
+        "và kết quả phân tích dữ liệu phim."
+    )
+
+    # TỔNG QUAN
+
+    st.subheader("Tổng Quan Dữ Liệu")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "Số lượng phim",
+            len(movies)
+        )
+
+    with col2:
+        st.metric(
+            "Số lượt đánh giá",
+            len(ratings)
+        )
+
+    with col3:
+        st.metric(
+            "Số người dùng",
+            ratings["UserID"].nunique()
+        )
+
+    # TÌM KIẾM PHIM
+
+    st.subheader("Tra Cứu Phim")
+
+    search_text = st.text_input(
+        "Nhập tên phim để tìm kiếm:"
+    )
+
+    if search_text:
+
+        search_result = movies[
+            movies["MovieTitle"]
+            .str.contains(
+                search_text,
+                case=False,
+                na=False
+            )
+        ]
+
+        st.write(
+            f"Tìm thấy {len(search_result)} phim."
+        )
+
+        st.dataframe(
+            search_result[
+                [
+                    "MovieID",
+                    "MovieTitle",
+                    "ReleaseDate",
+                    "IMDbURL"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        st.dataframe(
+            movies.head(20),
+            use_container_width=True,
+            hide_index=True
+        )
+
+    # THỐNG KÊ ĐÁNH GIÁ
+
+    st.subheader("Thống Kê Đánh Giá")
+
+    rating_col1, rating_col2, rating_col3 = st.columns(3)
+
+    with rating_col1:
+        average_rating = ratings["Ratings"].mean()
+
+        st.metric(
+            "Điểm đánh giá trung bình",
+            f"{average_rating:.2f}"
+        )
+
+    with rating_col2:
+        highest_rating = ratings["Ratings"].max()
+
+        st.metric(
+            "Điểm đánh giá cao nhất",
+            f"{highest_rating:.0f}"
+        )
+
+    with rating_col3:
+        lowest_rating = ratings["Ratings"].min()
+
+        st.metric(
+            "Điểm đánh giá thấp nhất",
+            f"{lowest_rating:.0f}"
+        )
+
+    # DỮ LIỆU ĐÁNH GIÁ
+
+    st.subheader("Dữ Liệu Đánh Giá")
+
+    st.dataframe(
+        ratings.head(20),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # KHU VỰC EDA CỦA TV3
+
+    st.subheader("Biểu Đồ Phân Tích")
+
+    st.info(
+        "Các biểu đồ EDA của TV3 sẽ được tích hợp "
+        "vào khu vực này."
+    )
