@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from recommender import get_recommendations
 
 # CẤU HÌNH TRANG
 
@@ -101,17 +102,20 @@ with tab1:
     )
 
     if st.button("Hiển Thị Gợi Ý"):
-
-        st.info(
-            "Chức năng đề xuất phim sẽ được tích hợp "
-            "sau khi TV1 hoàn thành mô hình Recommendation."
+        recommendations = get_recommendations(
+            movie_title=selected_movie,
+            top_n=num_rec
         )
 
-        st.write("Phim đã chọn:", selected_movie)
-        st.write("Số lượng phim cần đề xuất:", num_rec)
-
-        # TODO:
-        # Tích hợp model của TV1 tại đây.
+        if recommendations and recommendations[0].startswith("Không tìm thấy phim"):
+            st.warning(recommendations[0])
+        elif recommendations:
+            st.success(f"Đề xuất cho phim: {selected_movie}")
+            st.subheader("Các phim tương tự")
+            for index, movie_title in enumerate(recommendations, start=1):
+                st.write(f"{index}. {movie_title}")
+        else:
+            st.warning("Không tìm thấy phim đề xuất.")
 
 # TAB 2: PHÂN TÍCH DỮ LIỆU
 
@@ -235,8 +239,3 @@ with tab2:
     # KHU VỰC EDA CỦA TV3
 
     st.subheader("Biểu Đồ Phân Tích")
-
-    st.info(
-        "Các biểu đồ EDA của TV3 sẽ được tích hợp "
-        "vào khu vực này."
-    )
