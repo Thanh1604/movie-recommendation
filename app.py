@@ -94,17 +94,10 @@ with tab1:
         movie_list
     )
 
-    num_rec = st.slider(
-        "Số lượng phim gợi ý:",
-        min_value=1,
-        max_value=10,
-        value=5
-    )
-
     if st.button("Hiển Thị Gợi Ý"):
         recommendations = get_recommendations(
             movie_title=selected_movie,
-            top_n=num_rec
+            top_n=5
         )
 
         if recommendations and recommendations[0].startswith("Không tìm thấy phim"):
