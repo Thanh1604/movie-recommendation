@@ -105,7 +105,11 @@ with tab1:
             top_n=5
         )
 
-        if recommendations and recommendations[0].startswith("Không tìm thấy phim"):
+        if (
+            recommendations
+            and isinstance(recommendations[0], str)
+            and recommendations[0].startswith("Không tìm thấy phim")
+        ):
             st.warning(recommendations[0])
         elif recommendations:
             st.success(f"Đề xuất cho phim: {selected_movie}")
