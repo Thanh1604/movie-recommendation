@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from recommender import get_recommendations
+from recommender import get_movie_poster, get_recommendations_with_scores
 
 # CẤU HÌNH TRANG
 
@@ -29,6 +29,11 @@ def load_data():
     )
 
     return movies, ratings
+
+
+@st.cache_data
+def load_movie_poster(movie_title):
+    return get_movie_poster(movie_title)
 
 
 try:
@@ -102,7 +107,7 @@ with tab1:
     )
 
     if st.button("Hiển Thị Gợi Ý"):
-        recommendations = get_recommendations(
+        recommendations = get_recommendations_with_scores(
             movie_title=selected_movie,
             top_n=num_rec
         )
@@ -112,8 +117,18 @@ with tab1:
         elif recommendations:
             st.success(f"Đề xuất cho phim: {selected_movie}")
             st.subheader("Các phim tương tự")
-            for index, movie_title in enumerate(recommendations, start=1):
-                st.write(f"{index}. {movie_title}")
+            result_columns = st.columns(min(len(recommendations), 5))
+            for index, recommendation in enumerate(recommendations, start=1):
+                with result_columns[(index - 1) % len(result_columns)]:
+                    movie_title = recommendation["title"]
+                    compatibility = recommendation["compatibility"]
+                    st.write(f"{index}. {movie_title}")
+                    st.caption(f"Độ tương thích: {compatibility:.1f}%")
+                    poster_url = load_movie_poster(movie_title)
+                    if poster_url:
+                        st.image(poster_url, width=180)
+                    else:
+                        st.caption("Không có poster")
         else:
             st.warning("Không tìm thấy phim đề xuất.")
 
