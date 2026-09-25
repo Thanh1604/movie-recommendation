@@ -17,12 +17,10 @@ if "dark_mode" not in st.session_state:
 with st.sidebar:
     st.subheader("⚙️ Giao diện")
 
-    dark_mode = st.toggle(
+    st.toggle(
         "🌙 Chế độ tối",
-        value=st.session_state.dark_mode
+        key="dark_mode"
     )
-
-    st.session_state.dark_mode = dark_mode
 
 if st.session_state.dark_mode:
     st.markdown(
@@ -200,38 +198,72 @@ with tab1:
 
     selected_movie = st.selectbox(
         "Chọn bộ phim:",
-        movie_list
+        movie_list,
+        key="selected_movie"
     )
 
-    if st.button("Hiển Thị Gợi Ý"):
-        recommendations = get_recommendations_with_scores(
-            movie_title=selected_movie,
-            top_n=5
+if "recommendations" not in st.session_state:
+    st.session_state.recommendations = None
+
+if "selected_recommendation_movie" not in st.session_state:
+    st.session_state.selected_recommendation_movie = None
+
+if st.button("Hiển Thị Gợi Ý"):
+
+    st.session_state.recommendations = get_recommendations_with_scores(
+        movie_title=selected_movie,
+        top_n=5
+    )
+
+    st.session_state.selected_recommendation_movie = selected_movie
+
+recommendations = st.session_state.recommendations
+
+if recommendations:
+
+    if (
+        isinstance(recommendations[0], str)
+        and recommendations[0].startswith("Không tìm thấy phim")
+    ):
+        st.warning(recommendations[0])
+
+    else:
+        movie_name = st.session_state.selected_recommendation_movie
+
+        st.success(f"Đề xuất cho phim: {movie_name}")
+        st.subheader("Các phim tương tự")
+
+        result_columns = st.columns(
+            min(len(recommendations), 5)
         )
 
-        if (
-            recommendations
-            and isinstance(recommendations[0], str)
-            and recommendations[0].startswith("Không tìm thấy phim")
+        for index, recommendation in enumerate(
+            recommendations,
+            start=1
         ):
-            st.warning(recommendations[0])
-        elif recommendations:
-            st.success(f"Đề xuất cho phim: {selected_movie}")
-            st.subheader("Các phim tương tự")
-            result_columns = st.columns(min(len(recommendations), 5))
-            for index, recommendation in enumerate(recommendations, start=1):
-                with result_columns[(index - 1) % len(result_columns)]:
-                    movie_title = recommendation["title"]
-                    compatibility = recommendation["compatibility"]
-                    st.write(f"{index}. {movie_title}")
-                    st.caption(f"Độ tương thích: {compatibility:.1f}%")
-                    poster_url = load_movie_poster(movie_title)
-                    if poster_url:
-                        st.image(poster_url, width=180)
-                    else:
-                        st.caption("Không có poster")
-        else:
-            st.warning("Không tìm thấy phim đề xuất.")
+
+            with result_columns[
+                (index - 1) % len(result_columns)
+            ]:
+
+                movie_title = recommendation["title"]
+                compatibility = recommendation["compatibility"]
+
+                st.write(f"{index}. {movie_title}")
+
+                st.caption(
+                    f"Độ tương thích: {compatibility:.1f}%"
+                )
+
+                poster_url = load_movie_poster(movie_title)
+
+                if poster_url:
+                    st.image(
+                        poster_url,
+                        width=180
+                    )
+                else:
+                    st.caption("Không có poster")
 
 # TAB 2: PHÂN TÍCH DỮ LIỆU
 
