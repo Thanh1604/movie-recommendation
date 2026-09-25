@@ -9,12 +9,118 @@ st.set_page_config(
     layout="wide"
 )
 
+# CHẾ ĐỘ GIAO DIỆN
+
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+with st.sidebar:
+    st.subheader("⚙️ Giao diện")
+
+    dark_mode = st.toggle(
+        "🌙 Chế độ tối",
+        value=st.session_state.dark_mode
+    )
+
+    st.session_state.dark_mode = dark_mode
+
+if st.session_state.dark_mode:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #0E1117;
+            color: white;
+        }
+
+        [data-testid="stSidebar"] {
+            background-color: #161B22;
+        }
+
+        h1, h2, h3, h4, h5, h6, p, label {
+            color: white !important;
+        }
+
+        .stTextInput input {
+            background-color: #262730;
+            color: white;
+        }
+
+        div[data-baseweb="select"] > div {
+            background-color: #262730;
+            color: white;
+        }
+
+        [data-testid="stDataFrame"] {
+            background-color: #161B22;
+        }
+
+        /* NÚT */
+        .stButton > button {
+            background-color: #262730;
+            color: white;
+            border: 1px solid #555555;
+        }
+
+        .stButton > button:hover {
+            background-color: #3A3F4B;
+            color: white;
+            border-color: #777777;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+else:
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: white;
+            color: #222222;
+        }
+
+        [data-testid="stSidebar"] {
+            background-color: #F5F5F5;
+        }
+
+        h1, h2, h3, h4, h5, h6, p, label {
+            color: #222222 !important;
+        }
+
+        .stTextInput input {
+            background-color: white;
+            color: #222222;
+        }
+
+        div[data-baseweb="select"] > div {
+            background-color: white;
+            color: #222222;
+        }
+
+        /* NÚT */
+        .stButton > button {
+            background-color: white;
+            color: #222222;
+            border: 1px solid #CCCCCC;
+        }
+
+        .stButton > button:hover {
+            background-color: #F0F0F0;
+            color: #222222;
+            border-color: #999999;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 st.title("Hệ Thống Phân Tích và Đề Xuất Phim")
 st.write(
     "Ứng dụng phân tích dữ liệu phim và đề xuất "
     "các bộ phim tương tự."
 )
-
 
 # ĐỌC DỮ LIỆU
 
@@ -30,11 +136,9 @@ def load_data():
 
     return movies, ratings
 
-
 @st.cache_data
 def load_movie_poster(movie_title):
     return get_movie_poster(movie_title)
-
 
 try:
     movies, ratings = load_data()
