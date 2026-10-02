@@ -134,9 +134,11 @@ def load_data():
 
     return movies, ratings
 
+
 @st.cache_data
 def load_movie_poster(movie_title):
     return get_movie_poster(movie_title)
+
 
 try:
     movies, ratings = load_data()
@@ -176,7 +178,9 @@ tab1, tab2 = st.tabs([
     "Phân Tích Dữ Liệu"
 ])
 
+# =========================================================
 # TAB 1: GỢI Ý PHIM
+# =========================================================
 
 with tab1:
 
@@ -202,70 +206,73 @@ with tab1:
         key="selected_movie"
     )
 
-if "recommendations" not in st.session_state:
-    st.session_state.recommendations = None
+    if "recommendations" not in st.session_state:
+        st.session_state.recommendations = None
 
-if "selected_recommendation_movie" not in st.session_state:
-    st.session_state.selected_recommendation_movie = None
+    if "selected_recommendation_movie" not in st.session_state:
+        st.session_state.selected_recommendation_movie = None
 
-if st.button("Hiển Thị Gợi Ý"):
+    if st.button("Hiển Thị Gợi Ý"):
 
-    st.session_state.recommendations = get_recommendations_with_scores(
-        movie_title=selected_movie,
-        top_n=5
-    )
-
-    st.session_state.selected_recommendation_movie = selected_movie
-
-recommendations = st.session_state.recommendations
-
-if recommendations:
-
-    if (
-        isinstance(recommendations[0], str)
-        and recommendations[0].startswith("Không tìm thấy phim")
-    ):
-        st.warning(recommendations[0])
-
-    else:
-        movie_name = st.session_state.selected_recommendation_movie
-
-        st.success(f"Đề xuất cho phim: {movie_name}")
-        st.subheader("Các phim tương tự")
-
-        result_columns = st.columns(
-            min(len(recommendations), 5)
+        st.session_state.recommendations = get_recommendations_with_scores(
+            movie_title=selected_movie,
+            top_n=5
         )
 
-        for index, recommendation in enumerate(
-            recommendations,
-            start=1
+        st.session_state.selected_recommendation_movie = selected_movie
+
+    recommendations = st.session_state.recommendations
+
+    if recommendations:
+
+        if (
+            isinstance(recommendations[0], str)
+            and recommendations[0].startswith("Không tìm thấy phim")
         ):
+            st.warning(recommendations[0])
 
-            with result_columns[
-                (index - 1) % len(result_columns)
-            ]:
+        else:
+            movie_name = st.session_state.selected_recommendation_movie
 
-                movie_title = recommendation["title"]
-                compatibility = recommendation["compatibility"]
+            st.success(f"Đề xuất cho phim: {movie_name}")
+            st.subheader("Các phim tương tự")
 
-                st.write(f"{index}. {movie_title}")
+            result_columns = st.columns(
+                min(len(recommendations), 5)
+            )
 
-                st.caption(
-                    f"Độ tương thích: {compatibility:.1f}%"
-                )
+            for index, recommendation in enumerate(
+                recommendations,
+                start=1
+            ):
 
-                poster_url = load_movie_poster(movie_title)
+                with result_columns[
+                    (index - 1) % len(result_columns)
+                ]:
 
-                if poster_url:
-                    st.image(
-                        poster_url,
-                        width=180
+                    movie_title = recommendation["title"]
+                    compatibility = recommendation["compatibility"]
+
+                    st.write(f"{index}. {movie_title}")
+
+                    st.caption(
+                        f"Độ tương thích: {compatibility:.1f}%"
                     )
-                else:
-                    st.caption("Không có poster")
 
+                    poster_url = load_movie_poster(movie_title)
+
+                    if poster_url:
+                        st.image(
+                            poster_url,
+                            width=180
+                        )
+                    else:
+                        st.caption("Không có poster")
+
+
+# =========================================================
 # TAB 2: PHÂN TÍCH DỮ LIỆU
+# =========================================================
 
 with tab2:
 
@@ -384,6 +391,152 @@ with tab2:
         hide_index=True
     )
 
+    # =====================================================
     # KHU VỰC EDA CỦA TV3
+    # =====================================================
 
     st.subheader("Biểu Đồ Phân Tích")
+
+    st.write(
+        "Các biểu đồ dưới đây thể hiện kết quả "
+        "phân tích dữ liệu phim và hành vi người dùng."
+    )
+
+    # -----------------------------------------------------
+    # 1. PHÂN TÍCH ĐÁNH GIÁ
+    # -----------------------------------------------------
+
+    with st.expander(
+        "📊 Phân tích đánh giá",
+        expanded=True
+    ):
+
+        st.markdown("### Phân bố điểm đánh giá")
+
+        st.image(
+            "results/rating_distribution.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Số lượt đánh giá theo thể loại"
+        )
+
+        st.image(
+            "results/rating_count_by_genre.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Điểm đánh giá trung bình theo thể loại"
+        )
+
+        st.image(
+            "results/average_rating_by_genre.png",
+            width=600
+        )
+
+    # -----------------------------------------------------
+    # 2. PHÂN TÍCH PHIM
+    # -----------------------------------------------------
+
+    with st.expander("🎬 Phân tích phim"):
+
+        st.markdown(
+            "### Top 10 phim được đánh giá nhiều nhất"
+        )
+
+        st.image(
+            "results/top_10_most_rated_movies.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Phân bố số lượt đánh giá trên mỗi phim"
+        )
+
+        st.image(
+            "results/movie_rating_count_distribution.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Phân bố điểm trung bình của phim"
+        )
+
+        st.image(
+            "results/movie_average_rating_distribution.png",
+            width=600
+        )
+
+    # -----------------------------------------------------
+    # 3. PHÂN TÍCH NGƯỜI DÙNG
+    # -----------------------------------------------------
+
+    with st.expander("👤 Phân tích người dùng"):
+
+        st.markdown(
+            "### Top 10 người dùng hoạt động nhiều nhất"
+        )
+
+        st.image(
+            "results/top_10_active_users.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Phân bố số lượt đánh giá của người dùng"
+        )
+
+        st.image(
+            "results/user_activity_distribution.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Phân bố điểm trung bình của người dùng"
+        )
+
+        st.image(
+            "results/user_average_rating_distribution.png",
+            width=600
+        )
+
+    # -----------------------------------------------------
+    # 4. PHÂN TÍCH THEO THỜI GIAN
+    # -----------------------------------------------------
+
+    with st.expander("📅 Phân tích theo thời gian"):
+
+        st.markdown(
+            "### Số lượt đánh giá theo năm"
+        )
+
+        st.image(
+            "results/ratings_by_year.png",
+            width=600
+        )
+
+        st.markdown(
+            "### Điểm đánh giá trung bình theo năm"
+        )
+
+        st.image(
+            "results/average_rating_by_year.png",
+            width=600
+        )
+
+    # -----------------------------------------------------
+    # 5. PHÂN TÍCH THỂ LOẠI
+    # -----------------------------------------------------
+
+    with st.expander("🎭 Phân tích thể loại"):
+
+        st.markdown(
+            "### Số lượng phim theo thể loại"
+        )
+
+        st.image(
+            "results/rating_distribution.png",
+            width=600
+        )
