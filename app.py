@@ -134,11 +134,9 @@ def load_data():
 
     return movies, ratings
 
-
 @st.cache_data
 def load_movie_poster(movie_title):
     return get_movie_poster(movie_title)
-
 
 try:
     movies, ratings = load_data()
@@ -178,9 +176,7 @@ tab1, tab2 = st.tabs([
     "Phân Tích Dữ Liệu"
 ])
 
-# =========================================================
 # TAB 1: GỢI Ý PHIM
-# =========================================================
 
 with tab1:
 
@@ -269,10 +265,7 @@ with tab1:
                     else:
                         st.caption("Không có poster")
 
-
-# =========================================================
 # TAB 2: PHÂN TÍCH DỮ LIỆU
-# =========================================================
 
 with tab2:
 
@@ -307,50 +300,6 @@ with tab2:
             ratings["UserID"].nunique()
         )
 
-    # TÌM KIẾM PHIM
-
-    st.subheader("Tra Cứu Phim")
-
-    search_text = st.text_input(
-        "Nhập tên phim để tìm kiếm:"
-    )
-
-    if search_text:
-
-        search_result = movies[
-            movies["MovieTitle"]
-            .str.contains(
-                search_text,
-                case=False,
-                na=False
-            )
-        ]
-
-        st.write(
-            f"Tìm thấy {len(search_result)} phim."
-        )
-
-        st.dataframe(
-            search_result[
-                [
-                    "MovieID",
-                    "MovieTitle",
-                    "ReleaseDate",
-                    "IMDbURL"
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.dataframe(
-            movies.head(20),
-            use_container_width=True,
-            hide_index=True
-        )
-
     # THỐNG KÊ ĐÁNH GIÁ
 
     st.subheader("Thống Kê Đánh Giá")
@@ -381,19 +330,7 @@ with tab2:
             f"{lowest_rating:.0f}"
         )
 
-    # DỮ LIỆU ĐÁNH GIÁ
-
-    st.subheader("Dữ Liệu Đánh Giá")
-
-    st.dataframe(
-        ratings.head(20),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # =====================================================
     # KHU VỰC EDA CỦA TV3
-    # =====================================================
 
     st.subheader("Biểu Đồ Phân Tích")
 
@@ -402,9 +339,7 @@ with tab2:
         "phân tích dữ liệu phim và hành vi người dùng."
     )
 
-    # -----------------------------------------------------
     # 1. PHÂN TÍCH ĐÁNH GIÁ
-    # -----------------------------------------------------
 
     with st.expander(
         "📊 Phân tích đánh giá",
@@ -436,9 +371,7 @@ with tab2:
             width=600
         )
 
-    # -----------------------------------------------------
     # 2. PHÂN TÍCH PHIM
-    # -----------------------------------------------------
 
     with st.expander("🎬 Phân tích phim"):
 
@@ -469,9 +402,7 @@ with tab2:
             width=600
         )
 
-    # -----------------------------------------------------
     # 3. PHÂN TÍCH NGƯỜI DÙNG
-    # -----------------------------------------------------
 
     with st.expander("👤 Phân tích người dùng"):
 
@@ -502,9 +433,7 @@ with tab2:
             width=600
         )
 
-    # -----------------------------------------------------
     # 4. PHÂN TÍCH THEO THỜI GIAN
-    # -----------------------------------------------------
 
     with st.expander("📅 Phân tích theo thời gian"):
 
@@ -526,9 +455,7 @@ with tab2:
             width=600
         )
 
-    # -----------------------------------------------------
     # 5. PHÂN TÍCH THỂ LOẠI
-    # -----------------------------------------------------
 
     with st.expander("🎭 Phân tích thể loại"):
 
