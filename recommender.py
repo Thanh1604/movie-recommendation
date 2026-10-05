@@ -1,151 +1,148 @@
-import pandas as pd
+"""Mô hình gợi ý phim lai (Hybrid) đơn giản.
+
+Điểm gợi ý của mỗi phim = WEIGHT_GENRE  x (độ giống nhau về thể loại)
+                        + WEIGHT_RATING x (điểm đánh giá của đám đông)
+
+- Phần 1 (Content-based): cosine similarity trên 19 cột thể loại.
+- Phần 2 (Collaborative đơn giản): điểm trung bình phim do mọi người dùng chấm,
+  có "làm dịu" (damping) để phim ít lượt chấm không bị đánh giá quá cao/thấp.
+"""
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple
+
 import numpy as np
-import json
-import os
-import re
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import urlopen
+import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import TruncatedSVD
+
+from config import DAMPING, GENRE_COLUMNS, TOP_N, WEIGHT_GENRE, WEIGHT_RATING
+from utils import extract_release_year, remove_release_year
 
 
-def load_local_api_key():
-    """Read TMDB_API_KEY from the local .env file when available."""
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    if not os.path.exists(env_path):
-        return
-
-    with open(env_path, encoding="utf-8") as env_file:
-        for line in env_file:
-            name, separator, value = line.strip().partition("=")
-            if separator and name == "TMDB_API_KEY":
-                os.environ.setdefault(name, value.strip().strip('"').strip("'"))
-                return
+class MovieNotFoundError(Exception):
+    """Không tìm thấy phim trong dữ liệu."""
 
 
-load_local_api_key()
+@dataclass
+class Recommendation:
+    """Một phim được gợi ý, kèm thông tin để giải thích vì sao."""
+    movie_id: int
+    title: str                       # tên đã bỏ năm
+    year: Optional[int]
+    genre_similarity: float          # 0-100 (%), giống nhau về thể loại
+    shared_genres: List[str] = field(default_factory=list)
+    avg_rating: Optional[float] = None   # điểm trung bình thật; None nếu chưa ai chấm
+    num_ratings: int = 0
+    score: float = 0.0               # điểm tổng hợp dùng để xếp hạng
+
+
+def compute_movie_stats(
+    ratings: pd.DataFrame, damping: int = DAMPING
+) -> Tuple[pd.DataFrame, float]:
+    """Tính thống kê từng phim từ bảng ratings.
+
+    Trả về (bảng thống kê index = MovieID, điểm trung bình toàn cục) với các cột:
+      NumRatings   : số lượt chấm
+      AvgRating    : điểm trung bình thật
+      DampedRating : điểm trung bình đã làm dịu = (tổng điểm + damping * TB chung) / (số lượt + damping)
+    """
+    global_mean = float(ratings["Ratings"].mean())
+    grouped = ratings.groupby("MovieID")["Ratings"].agg(total="sum", count="count")
+    stats = pd.DataFrame({
+        "NumRatings": grouped["count"],
+        "AvgRating": grouped["total"] / grouped["count"],
+        "DampedRating": (grouped["total"] + damping * global_mean)
+                        / (grouped["count"] + damping),
+    })
+    return stats, global_mean
+
 
 class HybridRecommender:
-    def __init__(self, movies_path='data/cleaned_movies.csv', ratings_path='data/cleaned_ratings.csv'):
-        # 1. Load dữ liệu
-        self.movies = pd.read_csv(movies_path)
-        self.ratings = pd.read_csv(ratings_path)
-        
-        # 2. Xác định danh sách cột thể loại
-        exclude_cols = ["MovieID", "MovieTitle", "ReleaseDate", "IMDbURL", "Genres", "UserID", "Ratings", "Timestamp"]
-        self.genre_cols = [col for col in self.movies.columns if col not in exclude_cols]
-        
-        # 3. Giai đoạn 1: Content-Based (Cosine Similarity trên thể loại)
-        genre_matrix = self.movies[self.genre_cols].values
-        self.content_sim = cosine_similarity(genre_matrix, genre_matrix)
-        
-        # 4. Giai đoạn 2: Collaborative Filtering (TruncatedSVD)
-        user_item_matrix = self.ratings.pivot_table(index='UserID', columns='MovieID', values='Ratings').fillna(0)
-        
-        n_components = min(20, user_item_matrix.shape[1] - 1)
-        self.svd = TruncatedSVD(n_components=n_components, random_state=42)
-        user_item_predicted = self.svd.fit_transform(user_item_matrix)
-        
-        self.predicted_ratings = pd.DataFrame(
-            np.dot(user_item_predicted, self.svd.components_),
-            index=user_item_matrix.index,
-            columns=user_item_matrix.columns
+    def __init__(
+        self,
+        movies: pd.DataFrame,
+        ratings: pd.DataFrame,
+        weight_genre: float = WEIGHT_GENRE,
+        weight_rating: float = WEIGHT_RATING,
+    ):
+        # reset_index để "vị trí hàng" khớp với "vị trí trong ma trận tương đồng"
+        self.movies = movies.reset_index(drop=True)
+        self.movies["MovieTitle"] = self.movies["MovieTitle"].fillna("")
+        self.weight_genre = weight_genre
+        self.weight_rating = weight_rating
+
+        # 1. Content-based: ma trận độ giống nhau giữa mọi cặp phim
+        self.genre_matrix = self.movies[GENRE_COLUMNS].values
+        self.content_sim = cosine_similarity(self.genre_matrix)
+
+        # 2. Điểm đánh giá của đám đông (chỉ tính từ `ratings` được truyền vào,
+        #    nên khi đánh giá mô hình ta truyền tập train để tránh rò rỉ dữ liệu)
+        stats, global_mean = compute_movie_stats(ratings)
+        info = self.movies[["MovieID"]].join(stats, on="MovieID")
+        self.num_ratings = info["NumRatings"].fillna(0).astype(int).values
+        self.avg_rating = info["AvgRating"].values            # NaN nếu chưa ai chấm
+        damped = info["DampedRating"].fillna(global_mean).values
+        self.rating_score = (damped - 1) / 4                   # đưa về thang 0-1
+
+        # Tên hiển thị (bỏ năm) và năm phát hành
+        self.display_titles = self.movies["MovieTitle"].map(remove_release_year).tolist()
+        self.years = self.movies["MovieTitle"].map(extract_release_year).tolist()
+
+    def find_movie_index(self, movie_title: str) -> int:
+        """Tìm vị trí phim theo tên: khớp chính xác trước, khớp một phần sau."""
+        key = movie_title.strip().lower()
+        titles = self.movies["MovieTitle"].str.lower()
+
+        exact = np.flatnonzero((titles == key).values)
+        if exact.size:
+            return int(exact[0])
+
+        partial = np.flatnonzero(titles.str.contains(key, regex=False).values)
+        if partial.size:
+            return int(partial[0])
+
+        raise MovieNotFoundError(movie_title)
+
+    def recommend(self, movie_title: str, top_n: int = TOP_N) -> List[Recommendation]:
+        idx = self.find_movie_index(movie_title)
+
+        # Điểm tổng hợp cho TẤT CẢ phim (tính một lần, không dùng vòng lặp)
+        scores = (
+            self.weight_genre * self.content_sim[idx]
+            + self.weight_rating * self.rating_score
         )
+        scores[idx] = -np.inf   # loại chính phim đang chọn một cách tường minh
 
-    def recommend(self, movie_title, user_id=1, top_n=5):
-        recommendations = self.recommend_with_scores(movie_title, user_id, top_n)
-        if recommendations and isinstance(recommendations[0], str):
-            return recommendations
-        return [recommendation['title'] for recommendation in recommendations]
+        # kind="stable": khi hòa điểm thì giữ thứ tự cũ -> kết quả ổn định giữa các lần chạy
+        order = np.argsort(-scores, kind="stable")
 
-    def recommend_with_scores(self, movie_title, user_id=1, top_n=5):
-        # Tìm phim theo tên
-        movie_row = self.movies[self.movies['MovieTitle'].str.lower() == movie_title.lower()]
-        
-        if movie_row.empty:
-            movie_row = self.movies[self.movies['MovieTitle'].str.lower().str.contains(movie_title.lower(), na=False)]
-            if movie_row.empty:
-                return [f"Không tìm thấy phim '{movie_title}'!"]
-        
-        idx = movie_row.index[0]
-        
-        # Content-Based: Top 30 tương đồng
-        sim_scores = list(enumerate(self.content_sim[idx]))
-        sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-        top_candidates = sim_scores[1:31]
-        
-        candidate_indices = [i[0] for i in top_candidates]
-        candidate_movies = self.movies.iloc[candidate_indices].copy()
-        candidate_movies['Compatibility'] = [
-            self.content_sim[idx][candidate_idx]
-            for candidate_idx in candidate_indices
+        # Không gợi ý lại tên trùng với phim đã chọn (MovieLens có vài tên bị lặp)
+        # và bỏ dòng "unknown" của MovieLens.
+        seen = {self.display_titles[idx], "unknown"}
+        results: List[Recommendation] = []
+        for i in order:
+            title = self.display_titles[i]
+            if title in seen:
+                continue
+            seen.add(title)
+            results.append(self._build_recommendation(idx, int(i), float(scores[i])))
+            if len(results) == top_n:
+                break
+        return results
+
+    def _build_recommendation(self, idx: int, i: int, score: float) -> Recommendation:
+        shared = [
+            genre
+            for genre, a, b in zip(GENRE_COLUMNS, self.genre_matrix[idx], self.genre_matrix[i])
+            if a and b
         ]
-        
-        # Collaborative: Dự đoán rating
-        predicted_scores = []
-        for _, row in candidate_movies.iterrows():
-            m_id = row['MovieID']
-            if user_id in self.predicted_ratings.index and m_id in self.predicted_ratings.columns:
-                score = self.predicted_ratings.loc[user_id, m_id]
-            else:
-                score = 3.0
-            predicted_scores.append(score)
-            
-        candidate_movies['PredictedRating'] = predicted_scores
-        
-        # Sắp xếp và trả về
-        final_recommendations = candidate_movies.sort_values(by='PredictedRating', ascending=False)
-        recommendations = final_recommendations.head(top_n)
-        return [
-            {
-                'title': remove_release_year(row['MovieTitle']),
-                'compatibility': round(float(row['Compatibility']) * 100, 1),
-            }
-            for _, row in recommendations.iterrows()
-        ]
-
-recommender_system = HybridRecommender()
-
-def get_recommendations(movie_title, user_id=1, top_n=5):
-    return recommender_system.recommend(movie_title, user_id, top_n)
-
-
-def get_recommendations_with_scores(movie_title, user_id=1, top_n=5):
-    return recommender_system.recommend_with_scores(movie_title, user_id, top_n)
-
-def get_all_movie_titles():
-    return [remove_release_year(title) for title in recommender_system.movies['MovieTitle'].tolist()]
-
-
-def remove_release_year(movie_title):
-    """Remove a trailing release year, such as '(1995)', from a movie title."""
-    return re.sub(r"\s*\(\d{4}\)\s*$", "", str(movie_title)).strip()
-
-
-def get_movie_poster(movie_title, api_key=None):
-    """Return the TMDB poster URL for a movie, or None when unavailable."""
-    api_key = api_key or os.getenv("TMDB_API_KEY")
-    movie_title = remove_release_year(movie_title) if movie_title else ""
-    if not api_key or not movie_title:
-        return None
-
-    params = urlencode({
-        "api_key": api_key,
-        "query": movie_title,
-        "language": "en-US",
-        "include_adult": "false",
-    })
-    search_url = f"https://api.themoviedb.org/3/search/movie?{params}"
-
-    try:
-        with urlopen(search_url, timeout=10) as response:
-            data = json.load(response)
-    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
-        return None
-
-    results = data.get("results", [])
-    if not results or not results[0].get("poster_path"):
-        return None
-
-    return f"https://image.tmdb.org/t/p/w500{results[0]['poster_path']}"
+        avg = self.avg_rating[i]
+        return Recommendation(
+            movie_id=int(self.movies.at[i, "MovieID"]),
+            title=self.display_titles[i],
+            year=self.years[i],
+            genre_similarity=round(float(self.content_sim[idx, i]) * 100, 1),
+            shared_genres=shared,
+            avg_rating=None if np.isnan(avg) else round(float(avg), 2),
+            num_ratings=int(self.num_ratings[i]),
+            score=round(score, 4),
+        )
