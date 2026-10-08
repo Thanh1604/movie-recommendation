@@ -31,7 +31,8 @@ def _get_api_key() -> Optional[str]:
     return os.getenv("TMDB_API_KEY") or _read_env_file(ENV_PATH).get("TMDB_API_KEY")
 
 
-def _search_poster_path(query: str, year: Optional[int], api_key: str) -> Optional[str]:
+def _search_movie(query: str, year: Optional[int], api_key: str) -> Optional[dict]:
+    """Tìm phim trên TMDB, trả về kết quả đầu tiên có poster (không có thì lấy kết quả đầu tiên)."""
     params = {
         "api_key": api_key,
         "query": query,
@@ -47,24 +48,52 @@ def _search_poster_path(query: str, year: Optional[int], api_key: str) -> Option
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
         return None
 
-    for result in data.get("results", []):
+    results = data.get("results", [])
+    for result in results:
         if result.get("poster_path"):
-            return result["poster_path"]
-    return None
+            return result
+    return results[0] if results else None
+
+def _find_movie(movie_title: str, year: Optional[int], api_key: Optional[str]):
+    """Trả về (movie, poster_path).
+
+    movie       : kết quả khớp tên + năm nhất (dùng để lấy tóm tắt), hoặc None.
+    poster_path : poster của movie; nếu movie không có poster thì thử tìm lại không năm.
+    """
+    query = fix_article(remove_release_year(movie_title))
+    if not api_key or not query:
+        return None, None
+
+    movie = _search_movie(query, year, api_key)
+    poster_path = movie.get("poster_path") if movie else None
+
+    if year and not poster_path:
+        retry = _search_movie(query, None, api_key)
+        if retry:
+            poster_path = retry.get("poster_path")
+            if movie is None:
+                movie = retry
+    return movie, poster_path
 
 
 def get_movie_poster(
     movie_title: str, year: Optional[int] = None, api_key: Optional[str] = None
 ) -> Optional[str]:
     """Trả về URL poster, hoặc None nếu không có / lỗi mạng / thiếu API key."""
-    api_key = api_key or _get_api_key()
-    query = fix_article(remove_release_year(movie_title))
-    if not api_key or not query:
-        return None
-
-    # Thử có năm trước (chính xác hơn, tránh nhầm bản làm lại); không ra thì thử không năm.
-    poster_path = _search_poster_path(query, year, api_key)
-    if poster_path is None and year:
-        poster_path = _search_poster_path(query, None, api_key)
-
+    _, poster_path = _find_movie(movie_title, year, api_key or _get_api_key())
     return f"{TMDB_IMAGE_BASE}{poster_path}" if poster_path else None
+
+
+def get_movie_details(
+    movie_title: str, year: Optional[int] = None, api_key: Optional[str] = None
+) -> Optional[dict]:
+    """Trả về poster, tóm tắt (tiếng Anh), tên và ngày phát hành; None nếu không lấy được."""
+    movie, poster_path = _find_movie(movie_title, year, api_key or _get_api_key())
+    if not movie:
+        return None
+    return {
+        "poster_url": f"{TMDB_IMAGE_BASE}{poster_path}" if poster_path else None,
+        "overview": (movie.get("overview") or "").strip(),
+        "tmdb_title": movie.get("title"),
+        "release_date": movie.get("release_date"),
+    }

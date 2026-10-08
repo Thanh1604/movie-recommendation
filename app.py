@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from config import MOVIES_PATH, RATINGS_PATH
 from recommender import HybridRecommender, MovieNotFoundError
-from tmdb import get_movie_poster
+from tmdb import get_movie_details, get_movie_poster
 import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG
@@ -316,7 +316,83 @@ ratings["Timestamp"] = pd.to_datetime(
     ratings["Timestamp"],
     errors="coerce"
 )
+# TRẠNG THÁI VÀ HÀM CHO TRANG CHI TIẾT PHIM
 
+for _key in ("recommendations", "selected_recommendation_movie", "detail_rec"):
+    if _key not in st.session_state:
+        st.session_state[_key] = None
+
+# Giữ lại lựa chọn trong selectbox khi chuyển sang trang chi tiết rồi quay lại
+if "selected_movie" in st.session_state:
+    st.session_state.selected_movie = st.session_state.selected_movie
+
+
+def open_detail(rec):
+    st.session_state.detail_rec = rec
+
+
+def close_detail():
+    st.session_state.detail_rec = None
+
+
+@st.cache_data
+def load_movie_details(movie_title, year=None):
+    return get_movie_details(movie_title, year)
+
+
+@st.cache_data
+def load_rating_distribution(movie_id):
+    """Số lượt chấm của từng mức 1-5 sao: {1: n1, 2: n2, ...}."""
+    counts = (
+        ratings.loc[ratings["MovieID"] == movie_id, "Ratings"]
+        .dropna()
+        .astype(int)
+        .value_counts()
+    )
+    return {star: int(counts.get(star, 0)) for star in range(1, 6)}
+
+
+def show_movie_detail(rec):
+    st.button("← Quay lại danh sách gợi ý", on_click=close_detail)
+
+    details = load_movie_details(rec.title, rec.year)
+    poster_url = details["poster_url"] if details else None
+    overview = details["overview"] if details else ""
+
+    col_poster, col_info = st.columns([1, 2])
+
+    with col_poster:
+        if poster_url:
+            st.image(poster_url, width=300)
+        else:
+            st.caption("Không có poster")
+
+    with col_info:
+        st.header(rec.title)
+
+        distribution = load_rating_distribution(rec.movie_id)
+        total = sum(distribution.values())
+
+        st.subheader("Điểm đánh giá của người dùng")
+        if total == 0:
+            st.caption("Phim này chưa có lượt đánh giá.")
+        else:
+            st.write(f"⭐ **{rec.avg_rating}** / 5  ·  {total} lượt chấm")
+            for star in range(5, 0, -1):
+                count = distribution[star]
+                label_col, bar_col, number_col = st.columns([1, 6, 2])
+                label_col.write(f"{star} ⭐")
+                bar_col.progress(count / total)
+                number_col.write(f"{count} ({count / total * 100:.0f}%)")
+
+        st.subheader("Tóm tắt nội dung")
+        if overview:
+            st.write(overview)
+        else:
+            st.caption(
+                "Chưa lấy được tóm tắt cho phim này "
+                "(kiểm tra TMDB_API_KEY trong .env hoặc kết nối mạng)."
+            )
 # TẠO TABS
 
 tab1, tab2 = st.tabs([
@@ -328,68 +404,73 @@ tab1, tab2 = st.tabs([
 
 with tab1:
 
-    st.header("Tìm Phim Tương Tự")
+    if st.session_state.detail_rec is not None:
+        show_movie_detail(st.session_state.detail_rec)
 
-    st.write(
-        "Chọn một bộ phim bạn yêu thích. "
-        "Hệ thống sẽ đề xuất các bộ phim tương tự."
-    )
+    else:
 
-    # Danh sách phim
-    movie_list = (
-        movies["MovieTitle"]
-        .dropna()
-        .sort_values()
-        .unique()
-        .tolist()
-    )
+        st.header("Tìm Phim Tương Tự")
 
-    selected_movie = st.selectbox(
-        "Chọn bộ phim:",
-        movie_list,
-        key="selected_movie"
-    )
-    if "recommendations" not in st.session_state:
-        st.session_state.recommendations = None
-
-    if "selected_recommendation_movie" not in st.session_state:
-        st.session_state.selected_recommendation_movie = None
-
-    if st.button("Hiển Thị Gợi Ý"):
-        try:
-            recommender = load_recommender()
-            st.session_state.recommendations = recommender.recommend(
-                selected_movie, top_n=5
-            )
-            st.session_state.selected_recommendation_movie = selected_movie
-        except MovieNotFoundError:
-            st.session_state.recommendations = None
-            st.warning(f"Không tìm thấy phim: {selected_movie}")
-
-    recommendations = st.session_state.recommendations
-
-    if recommendations:
-        st.success(
-            f"Đề xuất cho phim: {st.session_state.selected_recommendation_movie}"
+        st.write(
+            "Chọn một bộ phim bạn yêu thích. "
+            "Hệ thống sẽ đề xuất các bộ phim tương tự."
         )
-        st.subheader("Các phim tương tự")
 
-        result_columns = st.columns(len(recommendations))
-        for index, rec in enumerate(recommendations, start=1):
-            with result_columns[index - 1]:
-                st.write(f"{index}. {rec.title}")
-                st.caption(f"Độ phù hợp: {rec.compatibility:.1f}%")
-                if rec.avg_rating is not None:
-                    st.caption(f"⭐ {rec.avg_rating}")
-                else:
-                    st.caption("⭐ Chưa có đánh giá")
+        # Danh sách phim
+        movie_list = (
+            movies["MovieTitle"]
+            .dropna()
+            .sort_values()
+            .unique()
+            .tolist()
+        )
 
-                poster_url = load_movie_poster(rec.title, rec.year)
-                if poster_url:
-                    st.image(poster_url, width=180)
-                else:
-                    st.caption("Không có poster")
+        selected_movie = st.selectbox(
+            "Chọn bộ phim:",
+            movie_list,
+            key="selected_movie"
+        )
         
+        if st.button("Hiển Thị Gợi Ý"):
+            try:
+                recommender = load_recommender()
+                st.session_state.recommendations = recommender.recommend(
+                    selected_movie, top_n=5
+                )
+                st.session_state.selected_recommendation_movie = selected_movie
+            except MovieNotFoundError:
+                st.session_state.recommendations = None
+                st.warning(f"Không tìm thấy phim: {selected_movie}")
+
+        recommendations = st.session_state.recommendations
+
+        if recommendations:
+            st.success(
+                f"Đề xuất cho phim: {st.session_state.selected_recommendation_movie}"
+            )
+            st.subheader("Các phim tương tự")
+
+            result_columns = st.columns(len(recommendations))
+            for index, rec in enumerate(recommendations, start=1):
+                with result_columns[index - 1]:
+                    st.write(f"{index}. {rec.title}")
+                    st.caption(f"Độ phù hợp: {rec.compatibility:.1f}%")
+                    if rec.avg_rating is not None:
+                        st.caption(f"⭐ {rec.avg_rating}")
+                    else:
+                        st.caption("⭐ Chưa có đánh giá")
+
+                    poster_url = load_movie_poster(rec.title, rec.year)
+                    if poster_url:
+                        st.image(poster_url, width=180)
+                    else:
+                        st.caption("Không có poster")
+                    st.button(
+                        "Xem chi tiết",
+                        key=f"detail_{rec.movie_id}",
+                        on_click=open_detail,
+                        args=(rec,),
+                    )
 
     
 
