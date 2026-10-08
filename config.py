@@ -22,11 +22,12 @@ GENRE_COLUMNS = [
 ]
 
 # ---------- Tham số của mô hình gợi ý ----------
-TOP_N = 5               # số phim gợi ý trả về
-WEIGHT_GENRE = 0.7      # trọng số của "giống nhau về thể loại"
-WEIGHT_RATING = 0.3     # trọng số của "điểm đánh giá của đám đông"
-DAMPING = 20            # phim càng ít lượt chấm thì điểm càng bị kéo về mức trung bình chung
-
+TOP_N = 5                   # số phim gợi ý trả về
+WEIGHT_CONTENT = 0.4        # trọng số "giống nhau về thể loại"
+WEIGHT_COLLAB = 0.4         # trọng số "người xem giống nhau" (collaborative)
+WEIGHT_POPULARITY = 0.2     # trọng số "điểm đánh giá chung của phim"
+COLLAB_SHRINKAGE = 10       # cặp phim ít người chấm chung thì giảm độ tin cậy
+DAMPING = 20                # phim càng ít lượt chấm thì điểm càng bị kéo về mức trung bình chung
 # ---------- Tham số giao diện / thống kê ----------
 MIN_RATINGS_FOR_TOP = 50    # ngưỡng lượt chấm tối thiểu khi xếp "phim điểm cao nhất"
 

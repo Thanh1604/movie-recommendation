@@ -110,7 +110,10 @@ class HybridRecommender:
 
         # Tên hiển thị (bỏ năm) và năm phát hành
         self.display_titles = self.movies["MovieTitle"].map(remove_release_year).tolist()
-        self.years = self.movies["MovieTitle"].map(extract_release_year).tolist()
+        self.years = [
+            None if pd.isna(y) else int(y)
+            for y in self.movies["MovieTitle"].map(extract_release_year)
+        ]
 
     # ------------------------------------------------------------------
     # Xây dựng các ma trận tương đồng

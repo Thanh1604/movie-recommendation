@@ -234,20 +234,21 @@ with tab1:
         st.subheader("Các phim tương tự")
 
         result_columns = st.columns(len(recommendations))
-
         for index, rec in enumerate(recommendations, start=1):
             with result_columns[index - 1]:
-                title = rec.title + (f" ({rec.year})" if rec.year else "")
-                st.write(f"{index}. {title}")
-                st.caption(f"Giống thể loại: {rec.genre_similarity:.1f}%")
+                st.write(f"{index}. {rec.title}")
+                st.caption(f"Độ phù hợp: {rec.compatibility:.1f}%")
                 if rec.avg_rating is not None:
-                    st.caption(f"⭐ {rec.avg_rating} ({rec.num_ratings} lượt chấm)")
+                    st.caption(f"⭐ {rec.avg_rating}")
+                else:
+                    st.caption("⭐ Chưa có đánh giá")
 
                 poster_url = load_movie_poster(rec.title, rec.year)
                 if poster_url:
                     st.image(poster_url, width=180)
                 else:
                     st.caption("Không có poster")
+        
 
     
 
