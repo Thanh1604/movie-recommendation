@@ -21,7 +21,7 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 
 import config
-from config import DAMPING, GENRE_COLUMNS, TOP_N
+from config import DAMPING, GENRE_COLUMNS, TOP_N, MIN_RATINGS_FOR_TOP
 from utils import extract_release_year, remove_release_year
 
 # Trọng số: nếu config.py chưa khai báo thì dùng giá trị mặc định này.
@@ -198,7 +198,38 @@ class HybridRecommender:
             if len(results) == top_n:
                 break
         return results
+    
+    def top_movies(
+        self, top_n: int = 10, min_ratings: int = MIN_RATINGS_FOR_TOP
+    ) -> List[Recommendation]:
+        """Top phim hot: nhiều lượt chấm + điểm cao (dùng lại các mảng đã tính sẵn)."""
+        # lexsort: khóa CUỐI là khóa chính -> xếp theo rating_score, hòa thì theo số lượt chấm
+        order = np.lexsort((-self.num_ratings, -self.rating_score))
 
+        full_titles = self.movies["MovieTitle"].str.lower().str.strip().tolist()
+        seen = {"unknown"}
+        results: List[Recommendation] = []
+        for i in order:
+            i = int(i)
+            full = full_titles[i]
+            if self.num_ratings[i] < min_ratings or full in seen:
+                continue
+            seen.add(full)
+            avg = self.avg_rating[i]
+            results.append(Recommendation(
+                movie_id=int(self.movies.at[i, "MovieID"]),
+                title=self.display_titles[i],
+                year=self.years[i],
+                genre_similarity=0.0,
+                avg_rating=None if np.isnan(avg) else round(float(avg), 2),
+                num_ratings=int(self.num_ratings[i]),
+                score=round(float(self.rating_score[i]), 4),
+                compatibility=round(float(self.rating_score[i]) * 100, 1),
+            ))
+            if len(results) == top_n:
+                break
+        return results
+    
     def _build_recommendation(self, idx: int, i: int, score: float) -> Recommendation:
         shared = [
             genre

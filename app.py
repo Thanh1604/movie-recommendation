@@ -4,7 +4,7 @@ from config import MOVIES_PATH, RATINGS_PATH
 from recommender import HybridRecommender, MovieNotFoundError
 from tmdb import get_movie_details, get_movie_poster
 import streamlit.components.v1 as components
-
+import html as html_lib
 # CẤU HÌNH TRANG
 
 st.set_page_config(
@@ -123,145 +123,6 @@ st.write(
     "các bộ phim tương tự."
 )
 
-# TOP 10 PHIM
-
-import streamlit.components.v1 as components
-
-st.subheader("🔥 Top 10 Phim Hot")
-
-html = """
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-
-body {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    font-family: Arial, sans-serif;
-}
-
-.carousel {
-    width: 960px;
-    max-width: 100%;
-    margin: 0 auto;
-    overflow: hidden;
-}
-
-.track {
-    display: flex;
-    gap: 15px;
-    width: max-content;
-    transform: translateX(0);
-}
-
-.movie-card {
-    width: 180px;
-    height: 250px;
-    flex: 0 0 180px;
-
-    border-radius: 10px;
-    overflow: hidden;
-
-    background: #eeeeee;
-    border: 1px solid #cccccc;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 18px;
-    font-weight: bold;
-    color: #777;
-}
-
-</style>
-</head>
-
-<body>
-
-<div class="carousel">
-    <div class="track" id="movieTrack">
-
-        <div class="movie-card">Poster 1</div>
-        <div class="movie-card">Poster 2</div>
-        <div class="movie-card">Poster 3</div>
-        <div class="movie-card">Poster 4</div>
-        <div class="movie-card">Poster 5</div>
-        <div class="movie-card">Poster 6</div>
-        <div class="movie-card">Poster 7</div>
-        <div class="movie-card">Poster 8</div>
-        <div class="movie-card">Poster 9</div>
-        <div class="movie-card">Poster 10</div>
-
-    </div>
-</div>
-
-<script>
-
-const track = document.getElementById("movieTrack");
-
-const step = 195;
-const maxPosition = 5;
-let position = 0;
-
-function moveCarousel() {
-
-    // Nếu đang ở nhóm chứa Poster 10
-    if (position === maxPosition) {
-
-        // Đứng yên 1.5 giây
-        setTimeout(function() {
-
-            // Giật ngay về đầu, KHÔNG animation
-            track.style.transition = "none";
-
-            position = 0;
-
-            track.style.transform = "translateX(0)";
-
-            // Chờ 1.5 giây rồi bắt đầu trượt tiếp
-            setTimeout(function() {
-
-                track.style.transition = "transform 1.5s ease";
-
-                moveCarousel();
-
-            }, 1500);
-
-        }, 1500);
-
-        return;
-    }
-
-    // Tăng sang vị trí tiếp theo
-    position++;
-
-    // Trượt trong 1.5 giây
-    track.style.transition = "transform 1.5s ease";
-
-    track.style.transform =
-        "translateX(-" + (position * step) + "px)";
-
-    // Đứng yên 1.5 giây trước khi trượt tiếp
-    setTimeout(moveCarousel, 3000);
-}
-
-// Bắt đầu carousel
-moveCarousel();
-
-</script>
-
-</body>
-</html>
-"""
-
-components.html(
-    html,
-    height=280,
-    scrolling=False
-)
 
 # ĐỌC DỮ LIỆU
 
@@ -316,6 +177,107 @@ ratings["Timestamp"] = pd.to_datetime(
     ratings["Timestamp"],
     errors="coerce"
 )
+
+# TOP 10 PHIM HOT
+
+@st.cache_data
+def load_top_movies(top_n=10):
+    """Top phim hot kèm URL poster (cache để không gọi TMDB lại mỗi lần chạy)."""
+    recommender = load_recommender()
+    items = []
+    for rec in recommender.top_movies(top_n):
+        items.append({
+            "title": rec.title,
+            "avg_rating": rec.avg_rating,
+            "poster_url": load_movie_poster(rec.title, rec.year),
+        })
+    return items
+
+
+def build_carousel_html(items):
+    cards = []
+    for item in items:
+        title = html_lib.escape(item["title"])
+        rating = f"⭐ {item['avg_rating']}" if item["avg_rating"] is not None else ""
+        if item["poster_url"]:
+            cards.append(
+                f'<div class="movie-card" title="{title}">'
+                f'<img src="{item["poster_url"]}" alt="{title}">'
+                f'<div class="badge">{rating}</div></div>'
+            )
+        else:
+            cards.append(f'<div class="movie-card" title="{title}">{title}</div>')
+
+    return """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { margin: 0; padding: 0; background: transparent; font-family: Arial, sans-serif; }
+.carousel { width: 960px; max-width: 100%; margin: 0 auto; overflow: hidden; }
+.track { display: flex; gap: 15px; width: max-content; transform: translateX(0); }
+.movie-card {
+    position: relative;
+    width: 180px; height: 250px; flex: 0 0 180px;
+    border-radius: 10px; overflow: hidden;
+    background: #eeeeee; border: 1px solid #cccccc;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 6px; box-sizing: border-box;
+    font-size: 16px; font-weight: bold; color: #777;
+}
+.movie-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.badge {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.65); color: #fff;
+    font-size: 14px; padding: 4px 0; text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="carousel">
+    <div class="track" id="movieTrack">
+        """ + "\n".join(cards) + """
+    </div>
+</div>
+<script>
+const track = document.getElementById("movieTrack");
+const step = 195;
+const maxPosition = 5;
+let position = 0;
+
+function moveCarousel() {
+    if (position === maxPosition) {
+        setTimeout(function() {
+            track.style.transition = "none";
+            position = 0;
+            track.style.transform = "translateX(0)";
+            setTimeout(function() {
+                track.style.transition = "transform 1.5s ease";
+                moveCarousel();
+            }, 1500);
+        }, 1500);
+        return;
+    }
+    position++;
+    track.style.transition = "transform 1.5s ease";
+    track.style.transform = "translateX(-" + (position * step) + "px)";
+    setTimeout(moveCarousel, 3000);
+}
+moveCarousel();
+</script>
+</body>
+</html>
+"""
+
+
+st.subheader("🔥 Top 10 Phim Hot")
+
+top_items = load_top_movies(10)
+if top_items:
+    components.html(build_carousel_html(top_items), height=280, scrolling=False)
+else:
+    st.caption("Chưa có dữ liệu để hiển thị top phim.")
+
 # TRẠNG THÁI VÀ HÀM CHO TRANG CHI TIẾT PHIM
 
 for _key in ("recommendations", "selected_recommendation_movie", "detail_rec"):
