@@ -3,6 +3,7 @@ import pandas as pd
 from config import MOVIES_PATH, RATINGS_PATH
 from recommender import HybridRecommender, MovieNotFoundError
 from tmdb import get_movie_poster
+import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG
 
@@ -120,6 +121,146 @@ st.title("Hệ Thống Phân Tích và Đề Xuất Phim")
 st.write(
     "Ứng dụng phân tích dữ liệu phim và đề xuất "
     "các bộ phim tương tự."
+)
+
+# TOP 10 PHIM
+
+import streamlit.components.v1 as components
+
+st.subheader("🔥 Top 10 Phim Hot")
+
+html = """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+
+body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-family: Arial, sans-serif;
+}
+
+.carousel {
+    width: 960px;
+    max-width: 100%;
+    margin: 0 auto;
+    overflow: hidden;
+}
+
+.track {
+    display: flex;
+    gap: 15px;
+    width: max-content;
+    transform: translateX(0);
+}
+
+.movie-card {
+    width: 180px;
+    height: 250px;
+    flex: 0 0 180px;
+
+    border-radius: 10px;
+    overflow: hidden;
+
+    background: #eeeeee;
+    border: 1px solid #cccccc;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 18px;
+    font-weight: bold;
+    color: #777;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="carousel">
+    <div class="track" id="movieTrack">
+
+        <div class="movie-card">Poster 1</div>
+        <div class="movie-card">Poster 2</div>
+        <div class="movie-card">Poster 3</div>
+        <div class="movie-card">Poster 4</div>
+        <div class="movie-card">Poster 5</div>
+        <div class="movie-card">Poster 6</div>
+        <div class="movie-card">Poster 7</div>
+        <div class="movie-card">Poster 8</div>
+        <div class="movie-card">Poster 9</div>
+        <div class="movie-card">Poster 10</div>
+
+    </div>
+</div>
+
+<script>
+
+const track = document.getElementById("movieTrack");
+
+const step = 195;
+const maxPosition = 5;
+let position = 0;
+
+function moveCarousel() {
+
+    // Nếu đang ở nhóm chứa Poster 10
+    if (position === maxPosition) {
+
+        // Đứng yên 1.5 giây
+        setTimeout(function() {
+
+            // Giật ngay về đầu, KHÔNG animation
+            track.style.transition = "none";
+
+            position = 0;
+
+            track.style.transform = "translateX(0)";
+
+            // Chờ 1.5 giây rồi bắt đầu trượt tiếp
+            setTimeout(function() {
+
+                track.style.transition = "transform 1.5s ease";
+
+                moveCarousel();
+
+            }, 1500);
+
+        }, 1500);
+
+        return;
+    }
+
+    // Tăng sang vị trí tiếp theo
+    position++;
+
+    // Trượt trong 1.5 giây
+    track.style.transition = "transform 1.5s ease";
+
+    track.style.transform =
+        "translateX(-" + (position * step) + "px)";
+
+    // Đứng yên 1.5 giây trước khi trượt tiếp
+    setTimeout(moveCarousel, 3000);
+}
+
+// Bắt đầu carousel
+moveCarousel();
+
+</script>
+
+</body>
+</html>
+"""
+
+components.html(
+    html,
+    height=280,
+    scrolling=False
 )
 
 # ĐỌC DỮ LIỆU
@@ -450,6 +591,6 @@ with tab2:
         )
 
         st.image(
-            "results/rating_distribution.png",
+            "results/genre_distribution.png",
             width=600
         )
