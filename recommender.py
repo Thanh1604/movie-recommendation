@@ -22,7 +22,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 import config
 from config import DAMPING, GENRE_COLUMNS, TOP_N, MIN_RATINGS_FOR_TOP
-from utils import extract_release_year, remove_release_year
+from utils import extract_release_year, remove_release_year, fix_article
 
 # Trọng số: nếu config.py chưa khai báo thì dùng giá trị mặc định này.
 WEIGHT_CONTENT = getattr(config, "WEIGHT_CONTENT", 0.4)
@@ -109,7 +109,12 @@ class HybridRecommender:
         self.collab_sim = self._build_collab_sim(ratings)
 
         # Tên hiển thị (bỏ năm) và năm phát hành
-        self.display_titles = self.movies["MovieTitle"].map(remove_release_year).tolist()
+        self.display_titles = (
+            self.movies["MovieTitle"]
+            .map(remove_release_year)
+            .map(fix_article)
+            .tolist()
+        )
         self.years = [
             None if pd.isna(y) else int(y)
             for y in self.movies["MovieTitle"].map(extract_release_year)
