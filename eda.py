@@ -546,6 +546,87 @@ def top_rated_movies(movie_stats,min_ratings=50):
     print(top_movies[["MovieTitle","RatingCount","AvgRating"]].to_string(index=False))
     return top_movies
 
+
+def plot_top_weighted_movies(movie_stats, ratings, min_ratings=50):
+    # Điểm trung bình của toàn bộ các lượt đánh giá
+    C = ratings["Ratings"].mean()
+
+    # Chỉ xét những phim có đủ số lượt đánh giá
+    m = min_ratings
+    eligible_movies = movie_stats[
+        movie_stats["RatingCount"] >= min_ratings
+    ].copy()
+
+    if eligible_movies.empty:
+        print("Không có phim nào đủ số lượt đánh giá.")
+        return
+
+    # Tính Weighted Rating
+    v = eligible_movies["RatingCount"]
+    R = eligible_movies["AvgRating"]
+
+    eligible_movies["WeightedRating"] = (
+        (v / (v + m)) * R
+        + (m / (v + m)) * C
+    )
+
+    # Lấy Top 10 theo Weighted Rating
+    top10 = eligible_movies.sort_values(
+        "WeightedRating", ascending=False
+    ).head(10)
+
+    # Đảo thứ tự để phim đứng đầu hiển thị ở trên cùng
+    top10 = top10.sort_values("WeightedRating")
+
+    # Vẽ biểu đồ
+    plt.figure(figsize=(12, 7))
+
+    bars = plt.barh(
+        top10["MovieTitle"],
+        top10["WeightedRating"],
+        color="steelblue",
+        edgecolor="black"
+    )
+
+    # Hiển thị điểm và số lượt đánh giá
+    for bar, (_, row) in zip(bars, top10.iterrows()):
+        label = (
+            f' WR: {row["WeightedRating"]:.2f}'
+            f' | Avg: {row["AvgRating"]:.2f}'
+            f' | n={int(row["RatingCount"])}'
+        )
+
+        plt.text(
+            bar.get_width() + 0.02,
+            bar.get_y() + bar.get_height() / 2,
+            label,
+            va="center",
+            fontsize=8
+        )
+
+    plt.title("Top 10 Highest-Rated Movies (Weighted Rating)")
+    plt.xlabel("Weighted Rating")
+    plt.ylabel("Movie")
+    plt.xlim(0, 5.8)
+    plt.tight_layout()
+    os.makedirs("results", exist_ok=True)
+    plt.savefig(
+        "results/top_10_highest_rated_movies.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.show()
+    plt.close()
+
+    print("\nTop 10 phim có Weighted Rating cao nhất:")
+    print(
+        top10[
+            ["MovieTitle", "AvgRating", "RatingCount", "WeightedRating"]
+        ].sort_values("WeightedRating", ascending=False).to_string(index=False)
+    )
+
+
 def main():
     # =====================================================
     # LOAD DATA
@@ -571,6 +652,7 @@ def main():
 
     movie_stats = movie_analysis(ratings,movies)
     plot_top_movies(movie_stats)
+    plot_top_weighted_movies(movie_stats,ratings,min_ratings=50)
     movie_rating_analysis(movie_stats)
     plot_movie_rating_count_distribution(movie_stats)
     plot_movie_average_rating_distribution(movie_stats)
