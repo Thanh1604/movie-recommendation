@@ -5,6 +5,15 @@ from recommender import HybridRecommender, MovieNotFoundError
 from tmdb import get_movie_details, get_movie_poster
 import streamlit.components.v1 as components
 import html as html_lib
+from pathlib import Path
+movie_carousel_component = components.declare_component(
+    "movie_carousel",
+    path=str(
+        Path(__file__).parent
+        / "components"
+        / "movie_carousel"
+    )
+)
 # CẤU HÌNH TRANG
 st.set_page_config(
     page_title="Hệ Thống Đề Xuất Phim",
@@ -220,6 +229,7 @@ def load_top_movies(top_n=10):
     for rec in recommender.top_movies(top_n):
         items.append({
             "title": rec.title,
+            "year": rec.year,
             "avg_rating": rec.avg_rating,
             "poster_url": load_movie_poster(rec.title, rec.year),
         })
@@ -227,20 +237,26 @@ def load_top_movies(top_n=10):
 def build_carousel_html(items):
     cards = []
     for index, item in enumerate(items, start=1):
+        
+        year = item.get("year") or ""
+        year_attr = html_lib.escape(str(year), quote=True)
+
         title = html_lib.escape(item["title"])
         rating = f"⭐ {item['avg_rating']}" if item["avg_rating"] is not None else ""
         number = f'<div class="movie-number">{index}</div>'
 
         if item["poster_url"]:
             cards.append(
-                f'<div class="movie-card" title="{title}">'
+                f'<div class="movie-card" title="{title}" '
+                f'data-title="{title}" data-year="{year_attr}">'
                 f'<img src="{item["poster_url"]}" alt="{title}">'
                 f'{number}'
                 f'<div class="badge">{rating}</div></div>'
             )
         else:
             cards.append(
-                f'<div class="movie-card" title="{title}">'
+                f'<div class="movie-card" title="{title}" '
+                f'data-title="{title}" data-year="{year_attr}">'
                 f'{number}{title}</div>'
             )
     # Sao chép 5 phim đầu để tạo hiệu ứng chạy liên tục
@@ -341,6 +357,30 @@ const track = document.getElementById("movieTrack");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 
+document.querySelectorAll(".movie-card").forEach(function(card) {
+    card.style.cursor = "pointer";
+
+    card.addEventListener("click", function() {
+        const title = card.dataset.title;
+        const year = card.dataset.year;
+
+        // Giữ URL hiện tại của ứng dụng Streamlit
+        const targetUrl = new URL(window.parent.location.href);
+
+        targetUrl.searchParams.set("hot_movie", title);
+
+        if (year) {
+            targetUrl.searchParams.set("hot_year", year);
+        } else {
+            targetUrl.searchParams.delete("hot_year");
+        }
+
+        // Mở lại ứng dụng với thông tin phim được chọn
+        window.top.location.href = targetUrl.toString();
+    });
+});
+
+
 const step = 195;
 const totalMovies = 10;
 const visibleMovies = 5;
@@ -399,8 +439,15 @@ startAutoPlay();
 """
 st.subheader("🔥 Top 10 Phim Hot")
 top_items = load_top_movies(10)
+
+hot_selection = None
+
 if top_items:
-    components.html(build_carousel_html(top_items), height=280, scrolling=False)
+    hot_selection = movie_carousel_component(
+        items=top_items,
+        key="top_movie_carousel",
+        default=None
+    )
 else:
     st.caption("Chưa có dữ liệu để hiển thị top phim.")
 # TRẠNG THÁI VÀ HÀM CHO TRANG CHI TIẾT PHIM
@@ -460,6 +507,38 @@ def show_movie_detail(rec):
             st.caption(
                 "Chưa lấy được tóm tắt cho phim này "
                 "(kiểm tra TMDB_API_KEY trong .env hoặc kết nối mạng)."
+            )
+# MỞ CHI TIẾT PHIM TỪ CAROUSEL TOP 10
+if hot_selection and isinstance(hot_selection, dict):
+    event_id = hot_selection.get("event_id")
+
+    if (
+        event_id
+        and event_id != st.session_state.get(
+            "_handled_hot_click"
+        )
+    ):
+        st.session_state["_handled_hot_click"] = event_id
+
+        hot_movie_title = hot_selection.get("title")
+        hot_movie_year = str(
+            hot_selection.get("year") or ""
+        )
+
+        recommender = load_recommender()
+
+        for rec in recommender.top_movies(10):
+            rec_year = str(rec.year or "")
+
+            if (
+                rec.title == hot_movie_title
+                and rec_year == hot_movie_year
+            ):
+                st.session_state.detail_rec = rec
+                break
+        else:
+            st.warning(
+                "Không tìm thấy phim được chọn trong Top 10."
             )
 # TẠO TABS
 tab1, tab2 = st.tabs([
